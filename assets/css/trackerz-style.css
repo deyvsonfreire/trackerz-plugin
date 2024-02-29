@@ -1,0 +1,16 @@
+/* Estilo para personalizar o botão criado pelo shortcode */
+.trackerz-button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #3498db;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Estilo para destacar o botão ao passar o mouse sobre ele */
+.trackerz-button:hover {
+    background-color: #2980b9;
+}
