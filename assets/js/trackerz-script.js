@@ -1,6 +1,4 @@
-// JavaScript for Trackerz Plugin
 
-// Trackerz Class
 const Trackerz = class {
 
 	constructor() {
@@ -9,9 +7,7 @@ const Trackerz = class {
 		this.data = {};
 
 		const mensagemConsole = `
-%cTrackerz
-%cOtimizando o rastreamento das campanhas desse site!
-%cAcesse https://Trackerz.app e conheça como podemos otimizar as suas campanhas também.`;
+%cTrackerz`;
 
 		const estilos = [
 			'font-size: 20px; font-weight: bold; color: #022260;',
@@ -22,16 +18,69 @@ const Trackerz = class {
 		console.log(mensagemConsole, ...estilos);
 	}
 
+					
+
 	async start(data) {
-		this.data = data;
+			this.data = data;
 
-		// Variáveis do Sistema
-		localStorage.setItem('tkz_domain', this.data.domain);
-		this.data.page_url = window.location.href;
+			// Função para recuperar a data e hora da última visita do localStorage
+			function get_last_visit_timestamp() {
+				return localStorage.getItem("trackerz_last_visit");
+			} 
 
-		if (!this.check_domain()) {
-			return;
-		}
+			// Função para recuperar a data e hora da última sessão do localStorage
+			function get_last_session_timestamp() {
+				return localStorage.getItem("trackerz_last_session");
+			} 
+
+			// Constante com a duração da sessão do GA4 (em milissegundos)
+			const GA4_SESSION_DURATION = 1800000; // 30 minutos
+
+			function get_session_id() {
+				let session_id = sessionStorage.getItem("trackerz_session_id");
+
+				if (!session_id) {
+					const now = Date.now();
+					const random_number = Math.floor(Math.random() * 1000000);
+					session_id = `${now}-${random_number}`; 
+					sessionStorage.setItem("trackerz_session_id", session_id);
+				}
+
+				return session_id;
+			}
+
+			// Verificação da sessão
+			const last_session_timestamp = get_last_session_timestamp();
+			if (last_session_timestamp && Date.now() - last_session_timestamp < GA4_SESSION_DURATION) {
+				// **Em vez de retornar, faça algo aqui se a sessão não for nova:**
+				console.log('Sessão não é nova, mas vamos continuar o processamento.');
+			} else {
+				// Atualização da data e hora da última sessão
+				localStorage.setItem("trackerz_last_session", Date.now());
+			}
+
+			// Verificação da visita
+			const last_visit_timestamp = get_last_visit_timestamp();
+			if (last_visit_timestamp && Date.now() - last_visit_timestamp < GA4_SESSION_DURATION) {
+				// **Em vez de retornar, faça algo aqui se a sessão não for nova:**
+				console.log('Sessão não é nova, mas vamos continuar o processamento.');
+			} else {
+				// Atualização da data e hora da última visita
+				localStorage.setItem("trackerz_last_visit", Date.now());
+			}
+
+			// Armazenamento da session_id
+			const session_id = get_session_id();
+			this.data.session_id = session_id // Inclua a session_id nos dados
+
+			// Variáveis do Sistema
+			localStorage.setItem('tkz_domain', this.data.domain);
+			this.data.page_url = window.location.href;
+
+			if (!this.check_domain()) {
+				return;
+			}
+
         
 
 		// Variáveis do Evento
@@ -69,7 +118,9 @@ const Trackerz = class {
 		this.data.geolocation = await this.get_geolocation();
 		this.data.user_agent = navigator.userAgent;
 
-		await this.send_lead_data();
+
+    await this.send_session_data();
+
 
 		this.set({
 			tkz_lead_id: this.data.lead_id,
@@ -91,6 +142,54 @@ const Trackerz = class {
 			this.monitor_forms();
 			await this.mask_load();
 		});
+
+
+
+    // Envia os dados para o Google Tag Manager
+	const gtmData = {
+		// **Sessão**
+		session_id: this.data.session_id,
+		domain: this.data.domain,
+		page_url: this.data.page_url,
+		event_day_in_month: this.data.event_day_in_month,
+		event_day: this.data.event_day,
+		event_month: this.data.event_month,
+		event_time_interval: this.data.event_time_interval,
+	
+		// **Lead**
+		lead_id: this.data.lead_id,
+		lead_name: this.data.lead_name,
+		lead_fname: this.data.lead_fname,
+		lead_lname: this.data.lead_lname,
+		lead_email: this.data.lead_email,
+		lead_phone: this.data.lead_phone,
+	
+		// **Geolocalização**
+		ip: this.data.geolocation?.tkz_lead_ip,
+		device: this.data.user_agent,
+		adress_city: this.data.geolocation?.tkz_lead_city,
+		adress_state: this.data.geolocation?.tkz_lead_region,
+		adress_zipcode: this.data.geolocation?.tkz_lead_zipcode,
+		adress_country_name: this.data.geolocation?.tkz_lead_country,
+		adress_country: this.data.geolocation?.tkz_lead_country_code,
+	
+		// **Página**
+		page_title: this.data.page_title,
+		traffic_source: this.data.traffic_source,
+		utm_source: this.data.utm_source,
+		utm_medium: this.data.utm_medium,
+		utm_campaign: this.data.utm_campaign,
+		utm_id: this.data.utm_id,
+		utm_term: this.data.utm_term,
+		utm_content: this.data.utm_content,
+		src: this.data.src,
+		sck: this.data.sck,
+	};
+	
+
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push(gtmData); 
+
 	}
 
 	/*
@@ -190,44 +289,46 @@ const Trackerz = class {
 	}
 
 	async get_geolocation() {
-		// const ip = this.get('tkz_lead_ip');
-		// const ip = await this.get_ip();
-		// const key_ip = 'tkz_geo_location_' + ip.replaceAll('.', '_').replaceAll(':', '_');
 		const key_ip = 'tkz_geo_location';
-		const geolocation = localStorage.getItem(key_ip)
-
+		const geolocation = localStorage.getItem(key_ip);
+	
 		if (!geolocation) {
-			//const response = await fetch('https://json.geoiplookup.io/');
-			const response = await fetch('https://ipwho.is/');
-			// const response = await fetch('https://freeipapi.com/api/json/');
-
-			if (!response.ok) {
-				response = await fetch('https://ipwhois.pro/?key=9byOkU4mxozzQv6s');
-			}
-
-			if (response.ok) {
-				const ipInfo = await response.json();
-
-				const values = {
-					tkz_lead_ip: ipInfo.ip || ip,
-					tkz_lead_city: ipInfo.city.toLowerCase(),
-					tkz_lead_region: ipInfo.region.replace('State of ', '').toLowerCase(),
-					// tkz_lead_region_code: ipInfo.region_code.toLowerCase(),
-					tkz_lead_country: ipInfo.country_name.toLowerCase() || ipInfo.country.toLowerCase(),
-					tkz_lead_country_code: ipInfo.country_code.toLowerCase(),
-					tkz_lead_currency: ipInfo.currency_code || ipInfo.currency.code,
-					tkz_lead_zipcode: ipInfo.postal_code || ipInfo.postal,
+			try {
+				let response = await fetch('https://ipwho.is/');
+				
+				if (!response.ok) {
+					response = await fetch('https://ipwhois.pro/?key=9byOkU4mxozzQv6s');
 				}
-
-				this.set(values);
-				localStorage.setItem(key_ip, JSON.stringify(values));
-
-				return values;
+	
+				if (response.ok) {
+					const ipInfo = await response.json();
+	
+					const values = {
+						tkz_lead_ip: ipInfo.ip,
+						tkz_lead_city: ipInfo.city ? ipInfo.city.toLowerCase() : '',
+						tkz_lead_region: ipInfo.region ? ipInfo.region.replace('State of ', '').toLowerCase() : '',
+						tkz_lead_country: ipInfo.country_name ? ipInfo.country_name.toLowerCase() : ipInfo.country.toLowerCase(),
+						tkz_lead_country_code: ipInfo.country_code.toLowerCase(),
+						tkz_lead_currency: ipInfo.currency_code || ipInfo.currency?.code,
+						tkz_lead_zipcode: ipInfo.postal_code || ipInfo.postal,
+					}
+	
+					this.set(values);
+					localStorage.setItem(key_ip, JSON.stringify(values));
+	
+					return values;
+				} else {
+					throw new Error('Erro ao obter dados de geolocalização');
+				}
+			} catch (error) {
+				console.error('Erro ao obter dados de geolocalização:', error);
+				return null; // Ou outro tratamento de erro adequado
 			}
 		}
-
+	
 		return JSON.parse(geolocation);
 	}
+	
 		
 	/*
 	 * Forms
@@ -463,16 +564,18 @@ const Trackerz = class {
 		const fb_data = {
 			event_id: data?.event_id,
 			event_time: this.getTimestampUtc(),
-			event_name: data?.event_name,
+			event_name: this.data.event_name,
 			content_ids: (data?.content_id) ? data?.content_id?.split(',') : null,
-			product_id: data?.product_id,
-			product_name: data?.product_name,
-			content_name: data?.content_name || data?.product_name,
-			value: data?.product_value,
-			currency: data?.currency,
-			page_title: data?.page_title,
-			page_id: data?.page_id,
+			product_id: this.data.product_id,
+			product_name: this.data.product_name,
+			content_name: this.data.content_name || this.data.product_name,
+			value: this.data.product_value,
+			currency: this.data.currency,
+			page_title: this.data.page_title,
+			page_id: this.data.page_id,
 		};
+
+		console.log("Dados do evento Facebook:", fb_data); // Adicionando console.log aqui
 
 		this.facebook_api(fb_data);
 		await this.facebook_web(fb_data);
@@ -602,6 +705,125 @@ const Trackerz = class {
 		await this.facebook_send_event(data);
 	}
 
+
+
+	async send_session_data() {
+		console.log('Enviando dados da sessão...');
+		const securityToken = this.data.api_token;
+		
+		try {
+			// Verificação se o session_id é o mesmo do último enviado
+			const previousSessionId = localStorage.getItem("previous_session_id");
+			if (previousSessionId && previousSessionId === this.data.session_id) {
+				console.log('O session_id é o mesmo do último enviado. Não é necessário enviar os dados novamente.');
+				return;
+			}
+	
+			const response = await fetch(this.data.api_session, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					//'Authorization': `Bearer ${securityToken}`
+				},
+				body: JSON.stringify({
+					session_id: this.data.session_id,
+					domain: this.data.domain,
+					page_url: this.data.page_url,
+					event_day_in_month: this.data.event_day_in_month,
+					event_day: this.data.event_day,
+					event_month: this.data.event_month,
+					event_time_interval: this.data.event_time_interval,
+					geolocation: this.data.geolocation,
+					lead_id: this.data.lead_id,
+					lead_name: this.data.lead_name,
+					lead_fname: this.data.lead_fname,
+					lead_lname: this.data.lead_lname,
+					lead_email: this.data.lead_email,
+					lead_phone: this.data.lead_phone,
+					ip: this.data.geolocation?.tkz_lead_ip,
+					device: this.data.user_agent,
+					adress_city: this.data.geolocation?.tkz_lead_city,
+					adress_state: this.data.geolocation?.tkz_lead_region,
+					adress_zipcode: this.data.geolocation?.tkz_lead_zipcode,
+					adress_country_name: this.data.geolocation?.tkz_lead_country,
+					adress_country: this.data.geolocation?.tkz_lead_country_code,
+				})
+			});
+			console.log('Resposta recebida:', response);
+	
+			if (!response.ok) {
+				console.error('Erro ao enviar dados da sessão.');
+				throw new Error('Erro ao enviar dados da sessão.');
+			}
+	
+			const responseData = await response.json();
+	
+			console.log('Dados recebidos do servidor:', responseData);
+	
+			// Envie os dados para o servidor para salvar no banco de dados
+			await this.saveSessionDataToServer(responseData.data);
+			
+			// Armazenamento do session_id atual como o último enviado
+			localStorage.setItem("previous_session_id", this.data.session_id);
+	
+			return responseData.data;
+		} catch (error) {
+			console.error('Erro ao enviar dados da sessão:', error);
+			return {};
+		}
+	}
+	
+	
+	async saveSessionDataToServer(leadData) {
+		try {
+			const baseURL = window.location.origin;
+			const apiURL = `${baseURL}/wp-json/trackerz/v1/save-session-data`;
+
+			console.log('API URL:', apiURL); // Adicionando um log para verificar a URL da API
+
+	
+			const response = await fetch(apiURL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					session_id: this.data.session_id,
+					domain: this.data.domain,
+					page_url: this.data.page_url,
+					event_day_in_month: this.data.event_day_in_month,
+					event_day: this.data.event_day,
+					event_month: this.data.event_month,
+					event_time_interval: this.data.event_time_interval,
+					geolocation: this.data.geolocation,
+					lead_id: this.data.lead_id,
+					lead_name: this.data.lead_name,
+					lead_fname: this.data.lead_fname,
+					lead_lname: this.data.lead_lname,
+					lead_email: this.data.lead_email,
+					lead_phone: this.data.lead_phone,
+					ip: this.data.geolocation?.tkz_lead_ip,
+					device: this.data.user_agent,
+					adress_city: this.data.geolocation?.tkz_lead_city,
+					adress_state: this.data.geolocation?.tkz_lead_region,
+					adress_zipcode: this.data.geolocation?.tkz_lead_zipcode,
+					adress_country_name: this.data.geolocation?.tkz_lead_country,
+					adress_country: this.data.geolocation?.tkz_lead_country_code,
+				})
+			});
+
+			console.log('Response:', response); // Adicionando um log para verificar a resposta da requisição
+	
+			if (!response.ok) {
+				throw new Error('Erro ao salvar dados da sessão no servidor.');
+			}
+		} catch (error) {
+			console.error('Erro ao salvar dados da sessão no servidor:', error);
+		}
+	}
+	
+	
+	
 	async send_lead_data() {
 		return await fetch(this.data.api_lead, {
 			method: 'POST',
@@ -653,33 +875,3 @@ const Trackerz = class {
 			});
 	}
 }
-
-// DOMContentLoaded Listener and plugin initialization
-document.addEventListener('DOMContentLoaded', function() {
-    // Code to be executed when the DOM is fully loaded
-    console.log('Trackerz Plugin loaded successfully!');
-
-    // Initialize Trackerz functionality
-    const trackerz = new Trackerz();
-
-    // Start tracking
-    trackerz.start({
-        // Data object - customize with specific data as needed
-        domain: 'trackerz.local', // Example domain
-        api_lead: 'https://7fmzs0q0s6bdzqptazajc2nc.hooks.n8n.cloud/webhook/lead', // Example lead API endpoint
-        api_event: 'https://7fmzs0q0s6bdzqptazajc2nc.hooks.n8n.cloud/webhook/event', // Example event API endpoint
-        fb_pixel: '656427354872318', // Facebook Pixel ID
-        fb_js: 'https://connect.facebook.net/en_US/sdk.js', // Facebook JavaScript SDK URL
-        // Add more data properties as needed
-    });
-
-    // Add event listeners or functions as needed
-    // For example, you can add a click event listener to a button
-    const button = document.getElementById('trackerz-button');
-    if (button) {
-        button.addEventListener('click', function() {
-            alert('Button clicked from Trackerz Plugin!');
-            // You can add additional tracking code or functionalities here
-        });
-    }
-});
