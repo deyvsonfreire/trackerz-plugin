@@ -1,4 +1,5 @@
 
+
 const Trackerz = class {
 
 	constructor() {
@@ -22,6 +23,13 @@ const Trackerz = class {
 
 	async start(data) {
 			this.data = data;
+						// Variáveis do Sistema
+						localStorage.setItem('tkz_domain', this.data.domain);
+						this.data.page_url = window.location.href;
+			
+						if (!this.check_domain()) {
+							return;
+						}
 
 			// Função para recuperar a data e hora da última visita do localStorage
 			function get_last_visit_timestamp() {
@@ -37,13 +45,13 @@ const Trackerz = class {
 			const GA4_SESSION_DURATION = 1800000; // 30 minutos
 
 			function get_session_id() {
-				let session_id = sessionStorage.getItem("trackerz_session_id");
+				let session_id = localStorage.getItem("trackerz_session_id");
 
 				if (!session_id) {
 					const now = Date.now();
 					const random_number = Math.floor(Math.random() * 1000000);
 					session_id = `${now}-${random_number}`; 
-					sessionStorage.setItem("trackerz_session_id", session_id);
+					localStorage.setItem("trackerz_session_id", session_id);
 				}
 
 				return session_id;
@@ -73,13 +81,7 @@ const Trackerz = class {
 			const session_id = get_session_id();
 			this.data.session_id = session_id // Inclua a session_id nos dados
 
-			// Variáveis do Sistema
-			localStorage.setItem('tkz_domain', this.data.domain);
-			this.data.page_url = window.location.href;
 
-			if (!this.check_domain()) {
-				return;
-			}
 
         
 
@@ -121,6 +123,8 @@ const Trackerz = class {
 
     await this.send_session_data();
 
+	await this.hash_value();
+
 
 		this.set({
 			tkz_lead_id: this.data.lead_id,
@@ -140,7 +144,6 @@ const Trackerz = class {
 		// Elementor Popup
 		window.addEventListener('elementor/popup/show', async () => {
 			this.monitor_forms();
-			await this.mask_load();
 		});
 
 
@@ -151,8 +154,9 @@ const Trackerz = class {
 		session_id: this.data.session_id,
 		domain: this.data.domain,
 		page_url: this.data.page_url,
-		event_day_in_month: this.data.event_day_in_month,
+		event_time: data?.event_time,
 		event_day: this.data.event_day,
+		event_day_in_month: this.data.event_day_in_month,
 		event_month: this.data.event_month,
 		event_time_interval: this.data.event_time_interval,
 	
@@ -163,19 +167,29 @@ const Trackerz = class {
 		lead_lname: this.data.lead_lname,
 		lead_email: this.data.lead_email,
 		lead_phone: this.data.lead_phone,
+		nm: await this.hash_value(this.data?.lead_name),
+		fn: await this.hash_value(this.data?.lead_fname || this.data?.lead_name),
+		ln: await this.hash_value(this.data?.lead_lname),
+		em: await this.hash_value(this.data?.lead_email),
+		ph: await this.hash_value(this.data?.lead_phone),
 	
 		// **Geolocalização**
-		ip: this.data.geolocation?.tkz_lead_ip,
-		device: this.data.user_agent,
+		client_user_agent: this.data.user_agent,
+		client_ip_address: this.data.geolocation?.tkz_lead_ip,
 		adress_city: this.data.geolocation?.tkz_lead_city,
 		adress_state: this.data.geolocation?.tkz_lead_region,
 		adress_zipcode: this.data.geolocation?.tkz_lead_zipcode,
 		adress_country_name: this.data.geolocation?.tkz_lead_country,
 		adress_country: this.data.geolocation?.tkz_lead_country_code,
-	
+		ct: await this.hash_value(this.data.geolocation?.tkz_lead_city),
+		st: await this.hash_value(this.data.geolocation?.tkz_lead_region),
+		zp: await this.hash_value(this.data.geolocation?.tkz_lead_zipcode),
+		country: await this.hash_value(this.data.geolocation?.tkz_lead_country_code),
+
 		// **Página**
 		page_title: this.data.page_title,
 		traffic_source: this.data.traffic_source,
+		page_id: data?.page_id || this.data?.page_id,
 		utm_source: this.data.utm_source,
 		utm_medium: this.data.utm_medium,
 		utm_campaign: this.data.utm_campaign,
@@ -184,6 +198,7 @@ const Trackerz = class {
 		utm_content: this.data.utm_content,
 		src: this.data.src,
 		sck: this.data.sck,
+		eventID: data?.event_id || this.data?.event_id,
 	};
 	
 
@@ -253,6 +268,7 @@ const Trackerz = class {
 		// Se não encontrado em nenhum lugar, retorne em branco
 		return '';
 	}
+
 
 	get_path(element) {
 		let path = [];
@@ -376,19 +392,21 @@ const Trackerz = class {
 			}
 		});
 	}
-
 	async input_monitor(name) {
 		const formFields = document.querySelectorAll(`[name*="${name}"]`);
+	
 		formFields.forEach((field) => {
 			field.addEventListener('input', async (event) => {
 				await this.input_save(event.target.name, event.target.value);
 			});
 			field.addEventListener('blur', async (event) => {
 				await this.input_save(event.target.name, event.target.value, field);
-				await this.send_lead_data();
 			});
 		});
 	}
+	
+
+	
 
 	async input_save(name, value, field = undefined) {
 		// Email
@@ -500,27 +518,26 @@ const Trackerz = class {
 		if (!value || !value.length) {
 			return null;
 		}
-
+	
 		// Verifica se o navegador suporta a API de Criptografia Web
 		if (crypto && crypto.subtle) {
 			// Converte a string para ArrayBuffer
 			const encoder = new TextEncoder();
 			const data = encoder.encode(value);
-
+	
 			// Calcula o hash usando o algoritmo SHA-256
 			const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-
+	
 			// Converte o ArrayBuffer para uma string hexadecimal
 			const hashArray = Array.from(new Uint8Array(hashBuffer));
 			const hashHex = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
-
+	
 			return hashHex;
 		} else {
-			if (!sha256) {
-				await this.load_script('https://cdn.jsdelivr.net/npm/js-sha256/src/sha256.min.js');
-			}
-
-
+			// Carrega o script sha256.min.js de forma assíncrona
+			await this.load_script('https://cdn.jsdelivr.net/npm/js-sha256/src/sha256.min.js');
+			
+			// Agora que o script foi carregado, podemos usar a função sha256
 			return sha256(value);
 		}
 	}
@@ -555,24 +572,30 @@ const Trackerz = class {
 
 	/*
 	 * Facebook
-	 */
+	 
 	async facebook_send_event(data) {
 		if (!this.data.fb_pixel) {
 			return;
 		}
 
+		let content_ids = data?.content_ids || null;
+
+		if (typeof content_ids === 'string') {
+			content_ids = content_ids.split(',');
+		}
+
 		const fb_data = {
 			event_id: data?.event_id,
 			event_time: this.getTimestampUtc(),
-			event_name: this.data.event_name,
+			event_name: data?.event_name,
 			content_ids: (data?.content_id) ? data?.content_id?.split(',') : null,
-			product_id: this.data.product_id,
-			product_name: this.data.product_name,
-			content_name: this.data.content_name || this.data.product_name,
-			value: this.data.product_value,
-			currency: this.data.currency,
-			page_title: this.data.page_title,
-			page_id: this.data.page_id,
+			product_id: data?.product_id,
+			product_name: data?.product_name,
+			content_name: data?.content_name || data?.product_name,
+			value: data?.product_value,
+			currency: data?.currency,
+			page_title: data?.page_title,
+			page_id: data?.page_id,
 		};
 
 		console.log("Dados do evento Facebook:", fb_data); // Adicionando console.log aqui
@@ -600,13 +623,19 @@ const Trackerz = class {
 				s = b.getElementsByTagName(e)[0];
 				s.parentNode.insertBefore(t, s)
 			}(window, document, 'script', this.data.fb_js);
-		}
 
-		fbq('init', this.data.fb_pixel);
-		if (this.data?.fb_test_code) {
-			fbq("data-fb-debug", this.data?.fb_test_code);
+			let pixels = this.data.fb_pixel.split(',');
+
+			for (let pixel of pixels) {
+				fbq('init', pixel);
+				if (this.data?.fb_test_code) {
+					fbq("data-fb-debug", this.data?.fb_test_code);
+				}
+			}
 		}
 	}
+		
+	
 
 	async facebook_web(data) {
 		this.facebook_load_pixel();
@@ -614,6 +643,7 @@ const Trackerz = class {
 		fbq('track', data?.event_name || "PageView", {
 			// Lead
 			external_id: this.data?.lead_id,
+			test_event_code: this.data?.fb_test_code,
 			nm: await this.hash_value(this.data?.lead_name),
 			fn: await this.hash_value(this.data?.lead_fname || this.data?.lead_name),
 			ln: await this.hash_value(this.data?.lead_lname),
@@ -621,10 +651,8 @@ const Trackerz = class {
 			ph: await this.hash_value(this.data?.lead_phone),
 
 			// Cookie
-			// fbc: this.data?.fb_fbc,
-			// fbp: this.data?.fb_fbp,
-			fbc: this.search_params_url_cookie('_fbc', 'fbclid') || null,
-			fbp: this.search_params_url_cookie('_fbp', 'fbp') || null,
+			fbc: this.data.fb_fbc || this.search_params_url_cookie('_fbc', 'fbclid') || null,
+			fbp: this.data.fb_fbp || this.search_params_url_cookie('_fbp', 'fbp') || null,
 
 			// Product
 			currency: data?.currency || this.data.geolocation?.tkz_lead_currency,
@@ -664,34 +692,82 @@ const Trackerz = class {
 		});
 	}
 
-	facebook_api(data) {
+	async facebook_api(data) {
 		// Variáveis de Pixels
 		this.data.fb_fbc = this.search_params_url_cookie('_fbc', 'fbclid')
 		this.data.fb_fbp = this.search_params_url_cookie('_fbp', 'fbp')
+	
+		try {
+			const response = await fetch(this.data.api_event, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					data: [
+						{
+							fbq_track: true,
+							event_name: data?.event_name || "PageView",
+							external_id: this.data?.lead_id,
+							test_event_code: this.data?.fb_test_code,
+							nm: await this.hash_value(this.data?.lead_name),
+							fn: await this.hash_value(this.data?.lead_fname || this.data?.lead_name),
+							ln: await this.hash_value(this.data?.lead_lname),
+							em: await this.hash_value(this.data?.lead_email),
+							ph: await this.hash_value(this.data?.lead_phone),
+							fbc: this.data.fb_fbc || this.search_params_url_cookie('_fbc', 'fbclid') || null,
+							fbp: this.data.fb_fbp || this.search_params_url_cookie('_fbp', 'fbp') || null,
+							currency: data?.currency || this.data.geolocation?.tkz_lead_currency,
+							content_type: 'product',
+							content_ids: data?.content_ids,
+							product_id: data?.product_id,
+							content_name: data?.content_name,
+							value: data?.value,
+							client_user_agent: this.data.user_agent,
+							client_ip_address: this.data.geolocation?.tkz_lead_ip,
+							ct: await this.hash_value(this.data.geolocation?.tkz_lead_city),
+							st: await this.hash_value(this.data.geolocation?.tkz_lead_region),
+							zp: await this.hash_value(this.data.geolocation?.tkz_lead_zipcode),
+							country: await this.hash_value(this.data.geolocation?.tkz_lead_country_code),
+							event_time: data?.event_time,
+							event_day: this.data.event_day,
+							event_day_in_month: this.data.event_day_in_month,
+							event_month: this.data.event_month,
+							event_time_interval: this.data.event_time_interval,
+							event_url: this.data.page_url,
+							event_source_url: this.data.page_url,
+							traffic_source: this.data.traffic_source,
+							page_id: data?.page_id || this.data?.page_id,
+							page_title: data?.page_title || this.data?.page_title,
+							plugin: this.data?.plugin_name,
+							plugin_info: this.data?.plugin_info,
+							eventID: data?.event_id || this.data?.event_id,
+						}
+					]
+				})
+			});
+	
+			if (response.ok) {
+				// Parse response JSON para obter o ID do evento
+				const responseData = await response.json();
 
-		fetch(this.data.api_event, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			// body: data
-			body: JSON.stringify({
-				...this.data,
-				...data
-			})
-		})
-		// .then(data => {
-		// 	console.log('Success:', data)
-		// })
-		// .catch(error => {
-		// 	console.error('Error:', error);
-		// });
+			} else {
+				console.error('Response not OK:', response);
+			}
+		} catch (error) {
+			console.error('Error:', error);
+		}
 	}
-
+	
+	
 	/**
 	 * Methods
-	 */
+
 	async send_event(data) {
+		if (!this.check_domain()) {
+			return;
+		}
+
 		// event_id
 		// event_name
 		// content_id
@@ -704,13 +780,11 @@ const Trackerz = class {
 
 		await this.facebook_send_event(data);
 	}
-
-
+	*/
 
 	async send_session_data() {
 		console.log('Enviando dados da sessão...');
-		const securityToken = this.data.api_token;
-		
+	
 		try {
 			// Verificação se o session_id é o mesmo do último enviado
 			const previousSessionId = localStorage.getItem("previous_session_id");
@@ -719,70 +793,107 @@ const Trackerz = class {
 				return;
 			}
 	
+			// Campos que serão enviados para o servidor
+			const filteredData = {};
+	
+			// Mapeia os campos desejados e adiciona ao objeto filteredData se não forem nulos ou vazios
+			const fieldsToSend = {
+				tkz_session_id: this.data.session_id,
+				tkz_lead_name: this.data.lead_name,
+				tkz_lead_fname: this.data.lead_fname,
+				tkz_lead_lname: this.data.lead_lname,
+				tkz_lead_email: this.data.lead_email,
+				tkz_lead_phone: this.data.lead_phone,
+				tkz_lead_ip: this.data.geolocation?.tkz_lead_ip,
+				tkz_device: this.data.user_agent,
+				tkz_lead_city: this.data.geolocation?.tkz_lead_city,
+				tkz_lead_region: this.data.geolocation?.tkz_lead_region,
+				tkz_lead_country_name: this.data.geolocation?.tkz_lead_country,
+				tkz_lead_country_code: this.data.geolocation?.tkz_lead_country_code,
+				tkz_lead_zipcode: this.data.geolocation?.tkz_lead_zipcode,
+				tkz_lead_currency: this.data.geolocation?.tkz_lead_currency,
+				tkz_fbclid: this.data.fbclid,
+				tkz_utm_medium: this.data.utm_medium,
+				tkz_utm_campaign: this.data.utm_campaign,
+				tkz_utm_content: this.data.utm_content,
+				tkz_utm_term: this.data.utm_term,
+				tkz_utm_source: this.data.utm_source,
+				tkz_gclid: this.data.gclid,
+				tkz_src: this.data.src,
+				tkz_url: this.data.page_url,
+				tkz_last_url: this.data.traffic_source,
+				tkz_campaignid: this.data.campaignid,
+				tkz_id_utm: this.data.utm_id,
+				tkz_cliente_id: this.data.tkz_cliente_id,
+				tkz_fbc: this.data.fb_fbc,
+				tkz_fbp: this.data.fb_fbp,
+				tkz_sck: this.data.sck,
+				tkz_ga_user_id: this.data.tkz_ga_user_id,
+				tkz_event_day: this.data.event_day_in_month,
+				tkz_event_month: this.data.event_month,
+				tkz_event_day_in_month: this.data.event_day_in_month,
+				tkz_event_time_interval: this.data.event_time_interval,
+				tkz_adset: this.data.tkz_adset,
+				tkz_adid: this.data.tkz_adid,
+				tkz_adgroupid: this.data.tkz_adgroupid,
+				tkz_targetid: this.data.tkz_targetid 
+			};
+	
+			// Filtra os campos para remover os valores nulos ou vazios
+			for (const [key, value] of Object.entries(fieldsToSend)) {
+				if (value !== null && value !== undefined && value !== '') {
+					filteredData[key] = value;
+				}
+			}
+	
+			console.log('Dados enviados para o servidor:', JSON.stringify(filteredData));
+	
+			// Envie a solicitação para o servidor
 			const response = await fetch(this.data.api_session, {
 				method: 'POST',
 				headers: {
+					'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxYWdwcnhhcnZ4bmJxaXJkc3RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTA0NzAxNDgsImV4cCI6MjAwNjA0NjE0OH0.rem_wWh56BhXDwRgLVltLW3HfkOXb-7EGBHirQXT8o8',
+					'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxYWdwcnhhcnZ4bmJxaXJkc3RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTA0NzAxNDgsImV4cCI6MjAwNjA0NjE0OH0.rem_wWh56BhXDwRgLVltLW3HfkOXb-7EGBHirQXT8o8',
 					'Content-Type': 'application/json',
-					//'Authorization': `Bearer ${securityToken}`
+					'Prefer': 'return=minimal'
 				},
-				body: JSON.stringify({
-					session_id: this.data.session_id,
-					domain: this.data.domain,
-					page_url: this.data.page_url,
-					event_day_in_month: this.data.event_day_in_month,
-					event_day: this.data.event_day,
-					event_month: this.data.event_month,
-					event_time_interval: this.data.event_time_interval,
-					geolocation: this.data.geolocation,
-					lead_id: this.data.lead_id,
-					lead_name: this.data.lead_name,
-					lead_fname: this.data.lead_fname,
-					lead_lname: this.data.lead_lname,
-					lead_email: this.data.lead_email,
-					lead_phone: this.data.lead_phone,
-					ip: this.data.geolocation?.tkz_lead_ip,
-					device: this.data.user_agent,
-					adress_city: this.data.geolocation?.tkz_lead_city,
-					adress_state: this.data.geolocation?.tkz_lead_region,
-					adress_zipcode: this.data.geolocation?.tkz_lead_zipcode,
-					adress_country_name: this.data.geolocation?.tkz_lead_country,
-					adress_country: this.data.geolocation?.tkz_lead_country_code,
-				})
+				body: JSON.stringify(filteredData)
 			});
+	
 			console.log('Resposta recebida:', response);
 	
-			if (!response.ok) {
-				console.error('Erro ao enviar dados da sessão.');
-				throw new Error('Erro ao enviar dados da sessão.');
+			 // Verifique se a resposta está vazia
+			 if (response.status === 201) {
+				console.log('Solicitação bem-sucedida. Recurso criado no servidor.');
+				// Não há necessidade de fazer parsing da resposta ou enviar dados adicionais
+				// Armazenamento do session_id atual como o último enviado
+				localStorage.setItem("previous_session_id", this.data.session_id);
+				return;
+			} else {
+				console.log('A solicitação não foi bem-sucedida. Código de status:', response.status);
 			}
-	
-			const responseData = await response.json();
-	
-			console.log('Dados recebidos do servidor:', responseData);
-	
-			// Envie os dados para o servidor para salvar no banco de dados
-			await this.saveSessionDataToServer(responseData.data);
-			
-			// Armazenamento do session_id atual como o último enviado
-			localStorage.setItem("previous_session_id", this.data.session_id);
-	
-			return responseData.data;
+				// Envie os dados para o servidor para salvar no banco de dados
+				await this.saveSessionDataToServer();
+				// Armazenamento do session_id atual como o último enviado
+				localStorage.setItem("previous_session_id", this.data.session_id);
+				return jsonData.data;
+		
 		} catch (error) {
 			console.error('Erro ao enviar dados da sessão:', error);
 			return {};
 		}
 	}
 	
-	
-	async saveSessionDataToServer(leadData) {
+
+	async saveSessionDataToServer() {
 		try {
 			const baseURL = window.location.origin;
-			const apiURL = `${baseURL}/wp-json/trackerz/v1/save-session-data`;
+			const apiURLsession = `${baseURL}/wp-json/trackerz/v1/save-session-data`;
 
-			console.log('API URL:', apiURL); // Adicionando um log para verificar a URL da API
+			console.log('API URL:', apiURLsession); // Adicionando um log para verificar a URL da API
 
 	
-			const response = await fetch(apiURL, {
+			const response = await fetch(apiURLsession, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -822,10 +933,15 @@ const Trackerz = class {
 		}
 	}
 	
-	
+
 	
 	async send_lead_data() {
-		return await fetch(this.data.api_lead, {
+
+		const baseURL = window.location.origin;
+			const apiURLlead = `${baseURL}/wp-json/trackerz/v1/lead`;
+
+			console.log('API URL:', apiURLlead); // Adicionando um log para verificar a URL da API
+		return await fetch(apiURLlead, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'
@@ -848,6 +964,11 @@ const Trackerz = class {
 				adress_zipcode: this.data.geolocation?.tkz_lead_zipcode,
 				adress_country_name: this.data.geolocation?.tkz_lead_country,
 				adress_country: this.data.geolocation?.tkz_lead_country_code,
+
+				// Facebook
+				fbp: this.search_params_url_cookie('_fbp', 'fbp'),
+				fbc: this.search_params_url_cookie('_fbc', 'fbclid'),
+
 			})
 		})
 			.then(async (data) => {
@@ -868,10 +989,16 @@ const Trackerz = class {
 				this.data.geolocation.tkz_lead_country = lead_data?.adress_country_name || this.data.geolocation?.tkz_lead_country;
 				this.data.geolocation.tkz_lead_country_code = lead_data?.adress_country || this.data.geolocation?.tkz_lead_country_code;
 
+				this.data.fb_fbc = lead_data?.fbc;
+				this.data.fb_fbp = lead_data?.fbp;
+
 				return lead_data;
 			})
 			.catch(() => {
+				console.error('Erro ao salvar dados da sessão no servidor:', error);
 				return {};
 			});
 	}
+
+
 }

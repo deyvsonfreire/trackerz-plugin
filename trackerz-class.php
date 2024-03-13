@@ -5,16 +5,21 @@ class Trackerz {
     public function __construct() {
         // Constructor
         add_action('init', array($this, 'init'));
-
+    
         // Adiciona o script do Trackerz
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
+        
+        // Define as constantes do plugin
+        $this->define_constants();
+        
+        // Adiciona o script do Trackerz URL Builder após o DOM estar pronto
+        add_action('wp_footer', array($this, 'enqueue_url_builder_script'));
     }
-
-
+    
     public function define_constants(){
-           define( 'TRACKERZ_PATH', plugin_dir_path(__FILE__));
-           define( 'TRACKERZ_URL', plugin_dir_url(__FILE__));
-        }
+        define( 'TRACKERZ_PATH', plugin_dir_path(__FILE__));
+        define( 'TRACKERZ_URL', plugin_dir_url(__FILE__));
+    }
 
     public function init() {
         // Initialization code here
@@ -38,7 +43,6 @@ class Trackerz {
 
     public function enqueue_scripts() {
         // Enqueue Trackerz script
-        //wp_enqueue_script('trackerz-script', plugins_url('/assets/js/trackerz-script.js', __FILE__), array('jquery'), '1.0', true);
         wp_enqueue_script('trackerz-action', plugins_url('/assets/js/trackerz-action.js', __FILE__), array('jquery'), '1.0', true);
     }
 
@@ -65,8 +69,21 @@ class Trackerz {
         $sql_1 = "CREATE TABLE $table_name_1 (
                 id mediumint(9) NOT NULL AUTO_INCREMENT,
                 time datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                event_name varchar(55) NOT NULL,
-                event_data text NOT NULL,
+                lead_id mediumint(9) NOT NULL,
+                lead_name varchar(255) NOT NULL,
+                lead_fname varchar(255) NOT NULL,
+                lead_lname varchar(255) NOT NULL,
+                lead_email varchar(255) NOT NULL,
+                lead_phone varchar(255) NOT NULL,
+                ip varchar(255) NOT NULL,
+                device varchar(255) NOT NULL,
+                adress_city varchar(255) NOT NULL,
+                adress_state varchar(255) NOT NULL,
+                adress_zipcode varchar(255) NOT NULL,
+                adress_country_name varchar(255) NOT NULL,
+                adress_country varchar(255) NOT NULL,
+                fbp varchar(255) NOT NULL,
+                fbc varchar(255) NOT NULL,
                 PRIMARY KEY  (id)
             ) $charset_collate;";
     
@@ -114,11 +131,10 @@ class Trackerz {
         // E.g., remove database tables, options, etc.
     }
 
-    public static function get_security_token() {
-        // Obtenha o token de segurança armazenado no banco de dados do WordPress
-        return get_option('trackerz_security_token');
+    public function enqueue_url_builder_script() {
+        // Enfileira o script do Trackerz URL Builder após o DOM estar pronto
+        wp_enqueue_script('trackerz-urlbuilder', TRACKERZ_URL . '/assets/js/trackerz-urlbuilder.js', array(), '1.0', true);
     }
-    
 
 }
 
@@ -147,5 +163,5 @@ class Trackerz_Widget extends WP_Widget {
 
 }
 
-$trackerz_plugin = new Trackerz();
 
+$trackerz_plugin = new Trackerz();

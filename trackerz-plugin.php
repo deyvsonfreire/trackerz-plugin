@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: Trackerz Plugin
+Plugin Name: Trackerz Plugin V1
 Plugin URI: https://trackerz.com
 Description: O plugin Trackerz oferece uma solução completa para rastreamento e análise de dados em sites WordPress. Com este plugin, você pode facilmente acompanhar e analisar o comportamento dos visitantes do seu site, monitorar conversões, e obter insights valiosos para otimizar o desempenho do seu site.
 Version: 1.0.5
@@ -18,72 +18,8 @@ require_once(plugin_dir_path(__FILE__) . '/trackerz-class.php');
 // Instantiate the Trackerz plugin
 $trackerz_plugin = new Trackerz();
 
-// Função para gerar e armazenar o token de segurança no momento da ativação do plugin
-function trackerz_generate_security_token() {
-    // Gera um token de segurança único
-    $security_token = wp_generate_password(32, false);
-
-    // Armazena o token de segurança como uma opção de configuração do plugin no banco de dados do WordPress
-    update_option('trackerz_security_token', $security_token);
-}
-
-// Registra a função para ser executada na ativação do plugin
-register_activation_hook(__FILE__, 'trackerz_generate_security_token');
-
-add_action('rest_api_init', function () {
-    // Registre a rota REST para obter o token de segurança
-    register_rest_route('trackerz/v1', '/security-token', array(
-        'methods' => 'GET',
-        'callback' => array('Trackerz', 'get_security_token'),
-    ));
-});
-
-add_action('rest_api_init', function () {
-    // Registre a rota REST para a sessão
-    register_rest_route('trackerz/v1', '/session', array(
-        'methods' => 'POST',
-        'callback' => 'trackerz_session',
-    ));
-});
-
-// Função para verificar o token no servidor
-function verificar_token_no_servidor() {
-    // Verifique se o cabeçalho de autorização está presente na solicitação
-    if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
-        // Se não houver cabeçalho de autorização, retorne false
-        return false;
-    }
-
-    // Obtenha o token do cabeçalho de autorização
-    $authorization_header = $_SERVER['HTTP_AUTHORIZATION'];
-    // Verifique se o token está no formato correto (por exemplo, "Bearer <token>")
-    if (!preg_match('/Bearer\s+(.*)$/i', $authorization_header, $matches)) {
-        // Se o token não estiver no formato correto, retorne false
-        return false;
-    }
-
-    // Extrai o token da expressão regular correspondente
-    $token = $matches[1];
-
-    // Obtenha o token armazenado no banco de dados do WordPress
-    $stored_token = get_option('trackerz_security_token');
-
-    // Verifique se os tokens correspondem
-    if ($token !== $stored_token) {
-        // Se os tokens não corresponderem, retorne false
-        return false;
-    }
-
-    // Se os tokens corresponderem, retorne true
-    return true;
-}
 
 function trackerz_session(WP_REST_Request $request) {
-    // Verifique o token apenas se a solicitação for feita para a rota de sessão
-    if (!verificar_token_no_servidor()) {
-        // Se o token não for válido, envie uma resposta de erro e termine o script
-        return new WP_Error('rest_forbidden', __('Token inválido.'), array('status' => 401));
-    }
 
     // Obtenha os dados enviados no corpo da requisição
     $data = $request->get_json_params();
@@ -250,6 +186,82 @@ function save_session_data_to_database(WP_REST_Request $request) {
         'adress_zipcode' => $adress_zipcode,
         'adress_country_name' => $adress_country_name,
         'adress_country' => $adress_country,
+    ));
+
+    // Verifique se houve algum erro ao inserir no banco de dados
+    if ($wpdb->last_error) {
+        return new WP_Error('database_error', 'Erro ao salvar os dados no banco de dados.', array('status' => 500));
+    }
+
+    // Se chegou até aqui, significa que os dados foram salvos com sucesso
+    return new WP_REST_Response(array(
+        'message' => 'Dados salvos com sucesso no banco de dados.',
+        'status' => 200,
+    ));
+
+}
+
+add_action('rest_api_init', function () {
+    register_rest_route('trackerz/v1', '/lead', array(
+        'methods' => 'POST',
+        'callback' => 'save_lead_data_to_database',
+    ));
+});
+
+function save_lead_data_to_database(WP_REST_Request $request) {
+    global $wpdb;
+
+    // Obtenha os dados enviados no corpo da requisição
+    $data = $request->get_json_params();
+
+    error_log('Dados recebidos no servidor:');
+    error_log(print_r($data, true));
+
+    // Verifique se os dados foram recebidos corretamente
+    if (empty($data)) {
+        return new WP_REST_Response(array(
+            'message' => 'Nenhum dado foi recebido',
+            'status' => 400
+        ));
+    }
+
+    // Acesso aos dados individuais
+    $lead_id = intval($data['body']['lead_id']);
+    $lead_name = sanitize_text_field($data['body']['lead_name']);
+    $lead_fname = sanitize_text_field($data['body']['lead_fname']);
+    $lead_lname = sanitize_text_field($data['body']['lead_lname']);
+    $lead_email = sanitize_email($data['body']['lead_email']);
+    $lead_phone = sanitize_text_field($data['body']['lead_phone']);
+    $ip = sanitize_text_field($data['body']['ip']);
+    $device = sanitize_text_field($data['body']['device']);
+    $adress_city = sanitize_text_field($data['body']['adress_city']);
+    $adress_state = sanitize_text_field($data['body']['adress_state']);
+    $adress_zipcode = sanitize_text_field($data['body']['adress_zipcode']);
+    $adress_country_name = sanitize_text_field($data['body']['adress_country_name']);
+    $adress_country = sanitize_text_field($data['body']['adress_country']);
+    $fbc = sanitize_text_field($data['body']['fbc']);
+    $fbp = sanitize_text_field($data['body']['fbp']);
+
+    // Agora, você pode salvar os dados no banco de dados
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'trackerz_lead';
+
+    $wpdb->insert($table_name, array(
+        'lead_id' => $lead_id,
+        'lead_name' => $lead_name,
+        'lead_fname' => $lead_fname,
+        'lead_lname' => $lead_lname,
+        'lead_email' => $lead_email,
+        'lead_phone' => $lead_phone,
+        'ip' => $ip,
+        'device' => $device,
+        'adress_city' => $adress_city,
+        'adress_state' => $adress_state,
+        'adress_zipcode' => $adress_zipcode,
+        'adress_country_name' => $adress_country_name,
+        'adress_country' => $adress_country,
+        'fbc' => $fbc,
+        'fbp' => $fbp,
     ));
 
     // Verifique se houve algum erro ao inserir no banco de dados
