@@ -1,0 +1,21 @@
+{
+    "name": "deyvsonfreire/trackerz",
+    "type": "wordpress-plugin",
+    "description": "Plugin de rastreamento avançado para WordPress.",
+    "license": "GPL-2.0",
+    "authors": [
+      {
+        "name": "Deyvson Freire",
+        "email": "contato@deyvsonfreire.com.br"
+      }
+    ],
+    "require": {
+      "php": "^8.0",
+      "wp-cli/wp-cli": "^2.7"
+    },
+    "autoload": {
+      "psr-4": {
+        "Trackerz\\": "includes/"
+      }
+    }
+  }

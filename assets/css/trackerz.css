@@ -1,0 +1,67 @@
+/* trackerz.css */
+
+/* Estilos para a página de administração */
+
+.wrap h1 {
+    margin-bottom: 20px;
+  }
+  
+  .wrap table {
+    width: 100%;
+    margin-bottom: 20px;
+    border-collapse: collapse;
+  }
+  
+  .wrap th,
+  .wrap td {
+    padding: 10px;
+    border: 1px solid #ddd;
+    text-align: left;
+  }
+  
+  .wrap th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+  }
+  
+  /* Estilos para os campos de entrada */
+  
+  .wrap input[type="text"],
+  .wrap input[type="email"],
+  .wrap input[type="tel"],
+  .wrap textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+  }
+  
+  /* Estilos para os botões */
+  
+  .wrap input[type="submit"] {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  
+  .wrap input[type="submit"]:hover {
+    background-color: #0069d9;
+  }
+  
+  /* Estilos adicionais */
+  
+  .wrap .error {
+    color: red;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+  
+  .wrap .notice {
+    color: green;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
